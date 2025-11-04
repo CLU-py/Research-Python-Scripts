@@ -3,7 +3,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 #%%set path for file locations
-path = 'C:/Users/User/OneDrive - The Pennsylvania State University/@GraduateSchool/Research/Masters Thesis/'
+#path = 'C:/Users/User/OneDrive - The Pennsylvania State University/@GraduateSchool/Research/Masters Thesis/' #personal desktop path
+path = '/import/SUPERDARN/matthew/' #office desktop path
 
 #set file paths
 day_file = path + 'dayside_profiles.txt'
@@ -45,6 +46,7 @@ plt.xlabel('Mass Density $(g/cm^3)$')
 plt.ylabel('Altitude (km)')
 
 #plt.title(f'{month}/{day}/{year} {str(hour)}00 UTC\nDayside ({lat_day}\u00B0N, {lon_day}\u00B0E) Neutral Density Profile')
+plt.tight_layout()
 plt.savefig('dayside_profile.png')
 
 #get nightside latitude and longitude
@@ -64,4 +66,5 @@ plt.xlabel('Mass Density $(g/cm^3)$')
 plt.ylabel('Altitude (km)')
 
 #plt.title(f'{month}/{day}/{year} {str(hour)}00 UTC\nNightside ({lat_night}\u00B0N, {lon_night}\u00B0E) Neutral Density Profile')
+plt.tight_layout()
 plt.savefig('nightside_profile.png')
