@@ -48,7 +48,7 @@ diff_energy_flux_log10 = np.log10(diff_energy_flux)
 sttime_dt = pd.to_datetime(sttime, format='%Y%m%d%H%M') #convert start time string to datetime object
 ndtime_dt = pd.to_datetime(ndtime, format='%Y%m%d%H%M') #convert end time string to datetime object
 
-interval = (datetime_series >= sttime_dt) & (datetime_series <= ndtime_dt) #set indicies that fall within the defined time interval                                                            sttime_dt = pd.to_datetime(sttime, format='%Y%m%d%H%M') #convert start time string to datetime object                   ndtime_dt = pd.to_datetime(ndtime, format='%Y%m%d%H%M') #convert end time string to datetime object                                                                                                                                             interval = (datetime_series >= sttime_dt) & (datetime_series <= ndtime_dt) #set indicies that fall within the defined time interval
+interval = (datetime_series >= sttime_dt) & (datetime_series <= ndtime_dt) #set indicies that fall within the defined time interval
 
 #==============================================================================
 #size arrays according to the time interval
@@ -149,6 +149,7 @@ plt.tight_layout()
 save_path = 'C:/Users/mflyn/Documents/Python Scripts/Research/dmsp'
 file_name = str(sat) + '_' + str(date) + '_' + str(sttime[8:12]) + '-' + str(ndtime[8:12])
 plt.savefig(save_path + '/' + file_name + '.png')
+
 
 
 
