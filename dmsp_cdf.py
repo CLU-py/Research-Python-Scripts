@@ -4,28 +4,20 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-#%%============================================================================
-#set start time and end time
-#==============================================================================
-sttime = str(201403210653) #start time
-ndtime = str(201403210706) #end time
+#%%set start time and end time
+sttime = str(201403271220) #start time
+ndtime = str(201403271250) #end time
 
-#==============================================================================
 #set path to .cdf file
-#==============================================================================
 date = sttime[0:8]
 data_path = '/import/SUPERDARN/matthew/dmsp/ssj4/' + date
 sat = 'f17' #choose between f16, f17, and f18
-#cdf_file = cdflib.CDF(data_path + '/dmsp-' + sat + '_ssj_precipitating-electrons-ions_' + date + '_v1.1.2.cdf') #path on wilcox.met
+cdf_file = cdflib.CDF(data_path + '/dmsp-' + sat + '_ssj_precipitating-electrons-ions_' + date + '_v1.1.2.cdf') #path on wilcox.met
 #cdf_file = cdflib.CDF('E:\Python Scripts\Research\dmsp-f17_ssj_precipitating-electrons-ions_20140321_v1.1.2.cdf') #path on Matthew-PC
 
-laptop_path = 'C:/Users\mflyn\Documents\Python Scripts\Research\dmsp/' + sat
-cdf_file = cdflib.CDF(laptop_path + '/dmsp-' + sat + '_ssj_precipitating-electrons-ions_' + date + '_v1.1.2.cdf') #path on matthew laptop
 cdf_info = cdf_file.cdf_info()
+#print(cdf_info.zVariables)
 
-#%%============================================================================
-#get variables from cdf
-#==============================================================================
 epoch_data = cdf_file.varget('Epoch') #epoch time; this is the x-axis
 datetime_array = cdflib.cdfepoch.to_datetime(epoch_data) #convert CDF_EPOCH to datetime
 datetime_series = pd.Series(datetime_array) #convert datetime array to pandas series
@@ -36,23 +28,27 @@ aacgm_lat = cdf_file.varget('SC_AACGM_LAT') #geomagnetic latitude
 aacgm_ltime = cdf_file.varget('SC_AACGM_LTIME') #MLT
 
 geocentric_r = cdf_file.varget('SC_GEOCENTRIC_R') #satellite altitude from the center of the earth in km
+
+#eci = cdf_file.varget('SC_ECI')
+#eci_label = cdf_file.varget('SC_ECI_LABEL')
 channel_energies = cdf_file.varget('CHANNEL_ENERGIES') #range of energy channels; this is the y-axis
 
+#electron_obs = cdf_file.varget('ELE_COUNTS_OBS') #observed electron count
+#electron_bkg = cdf_file.varget('ELE_COUNTS_BKG') #background electron count
+#electron_geometric = cdf_file.varget('ELE_GEOMETRIC')
+#electron_average_energy = cdf_file.varget('ELE_AVG_ENERGY') #average electron energy
+
 diff_energy_flux = cdf_file.varget('ELE_DIFF_ENERGY_FLUX') #electron flux per unit energy (erg/(cm^2 s sr eV)); this is the color or z-axis
-diff_energy_flux_log10 = np.log10(diff_energy_flux)
+diff_energy_flux_log10 = np.log10(diff_energy_flux)#.clip(lower = 1e1))
 #total_energy_flux = cdf_file.varget('ELE_TOTAL_ENERGY_FLUX') #electron flux over all measured energy channels (erg/(cm^2 s sr))
 
-#%%============================================================================
-#set time interval based on start and end times           
-#==============================================================================
+#%%set time interval based on start and end times
 sttime_dt = pd.to_datetime(sttime, format='%Y%m%d%H%M') #convert start time string to datetime object
 ndtime_dt = pd.to_datetime(ndtime, format='%Y%m%d%H%M') #convert end time string to datetime object
 
 interval = (datetime_series >= sttime_dt) & (datetime_series <= ndtime_dt) #set indicies that fall within the defined time interval
 
-#==============================================================================
 #size arrays according to the time interval
-#==============================================================================
 hhmm_array = hhmm_array[interval] #will be plotted on x-axis
 aacgm_ltime = aacgm_ltime[interval] #will be plotted on x-axis
 geocentric_r = geocentric_r[interval]
@@ -62,8 +58,10 @@ altitude = geocentric_r - r_e #will be plotted on x-axis
 diff_energy_flux = diff_energy_flux[interval] #z-axis
 diff_energy_flux_log10 = diff_energy_flux_log10[interval] #z-axis
 
-#%%create time-energy spectrogram
-fig, ax = plt.subplots(figsize = (10, 6))
+transpose_flux_cdf = diff_energy_flux_log10.T
+
+#create time-energy spectrogram
+fig, ax = plt.subplots(figsize = (20, 6))
 
 x = np.arange(len(hhmm_array)) #number of points to plot on x-axis
 
@@ -76,7 +74,6 @@ im = ax.pcolormesh(
 label_x = -0.05
 pad = -9.5
 
-#==============================================================================
 #add lables to UT axis
 #==============================================================================
 ax.set_xticks(np.linspace(0, len(x) - 1, 10))
@@ -87,7 +84,6 @@ xlabel_object = ax.set_xlabel('UT', labelpad = pad)
 xlabel_object.set_ha('right')
 xlabel_object.set_position((label_x, 0))
 
-#==============================================================================
 #add satellite geomagnetic latitude to x-axis
 #==============================================================================
 ax2 = ax.secondary_xaxis('bottom')
@@ -101,7 +97,6 @@ xlabel_object = ax2.set_xlabel('MLAT', labelpad = pad)
 xlabel_object.set_ha('right')
 xlabel_object.set_position((label_x, 0))
 
-#==============================================================================
 #add MLT to x-axis
 #==============================================================================
 ax3 = ax.secondary_xaxis('bottom')
@@ -115,7 +110,6 @@ xlabel_object = ax3.set_xlabel('MLT', labelpad = pad)
 xlabel_object.set_ha('right')
 xlabel_object.set_position((label_x, 0))
 
-#==============================================================================
 #add satellite altitude to x-axis
 #==============================================================================
 ax4 = ax.secondary_xaxis('bottom')
@@ -129,27 +123,21 @@ xlabel_object = ax4.set_xlabel('Alt', labelpad = pad)
 xlabel_object.set_ha('right')
 xlabel_object.set_position((label_x, 0))
 
+plt.title(f'{sat} {date} {sttime[8:12]}-{ndtime[8:12]}')
+
 ax.set_ylabel('Electron Energy\nlog (eV)')
 ax.set_yscale('log')
 ax.tick_params(axis = 'y', which = 'major', direction = 'in', left = True, right = True, length = 6)
 ax.tick_params(axis = 'y', which = 'minor', direction = 'in', left = True, right = True, length = 3)
 
-#==============================================================================
-#add colorbar and title
-#==============================================================================
+#ax.set_zscale('log')
+
 cbar = fig.colorbar(im, ax = ax, orientation = 'vertical')
 cbar.set_label('Differential Energy Flux\nlog (eV/$cm^2$-s-sr-eV)')
 
-plt.title(f'{date} {sttime[8:12]}-{ndtime[8:12]}')
-plt.tight_layout()
-
-#%%============================================================================
-#save figure
-#==============================================================================
-save_path = 'C:/Users/mflyn/Documents/Python Scripts/Research/dmsp'
-file_name = str(sat) + '_' + str(date) + '_' + str(sttime[8:12]) + '-' + str(ndtime[8:12])
-plt.savefig(save_path + '/' + file_name + '.png')
-
+save_path = '/import/SUPERDARN/matthew/dmsp/plots'
+file_name = 'cdf_' + str(sat) + '_' + str(date) + '_' + str(sttime[8:12]) + '-' + str(ndtime[8:12])
+plt.savefig(save_path + '/' + date + '/' + file_name + '.png')
 
 
 
