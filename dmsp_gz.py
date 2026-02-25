@@ -22,6 +22,13 @@ def get_labels(tick_locs, data_array, dataframe):
         labels.append(f"{val:.1f}" if not np.isnan(val) else "")
     return labels
 
+#define a function for decompressing the raw data
+def decompress(I):
+    X = I % 32
+    Y = (I - X) // 32
+
+    return (X + 32) * (2**Y) - 33
+
 #%%set start date for reading specific .gz file
 #time = str(20140327)
 sttime = str(201403271100)
@@ -171,16 +178,17 @@ for i in range(len(records)):
     time_array = (date_obj + np.timedelta64(1, 's') * seconds).astype(object)
     time_array = time_array[:-1]
 
-    electron_counts = pd.DataFrame(electron_data, columns = energy_headers)
-    electron_counts['seconds'] = seconds
-    electron_counts.set_index('seconds', inplace = True)
-    electron_counts.index.name = 'seconds'
-    electron_counts = electron_counts.iloc[:-1]
+    electron_raw = pd.DataFrame(electron_data, columns = energy_headers)
+    electron_raw['seconds'] = seconds
+    electron_raw.set_index('seconds', inplace = True)
+    electron_raw.index.name = 'seconds'
+    electron_raw = electron_raw.iloc[:-1]
 
     #reorder the energy channels
     desired_headers = [f'channel {i} ({channel_energies[i-1]} eV)' for i in range(1, 21)]
-    electron_counts = electron_counts[desired_headers]
-    electron_counts = electron_counts.rename(columns = {'channel 11 (949 eV)': 'Status Word 1'})
+    electron_raw = electron_raw[desired_headers]
+    electron_raw = electron_raw.rename(columns = {'channel 11 (949 eV)': 'Status Word 1'})
+    electron_counts = decompress(electron_raw)
 
     #%%calculate the differential number/energy fluxes
     denominator = sat_factors * del_t
