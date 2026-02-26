@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
+import matplotlib.gridspec as gridspec
 
 from datetime import date
 from collections import Counter
@@ -31,8 +32,8 @@ def decompress(I):
 
 #%%set start date for reading specific .gz file
 #time = str(20140327)
-sttime = str(201403271100)
-ndtime = str(201403271300)
+sttime = str(201403270500)
+ndtime = str(201403270700)
 date_str = sttime[0:8] #year, month, and day string
 
 st_hhmm = sttime[8:12]
@@ -97,6 +98,7 @@ full_mlt = np.full(total_seconds, np.nan) #empty array for satellite MLT
 full_mlat = np.full(total_seconds, np.nan) #empty array for satellite geomagnetic latitude
 full_utc = np.full(total_seconds, np.nan, dtype = 'U4') #empty array for UTC
 full_energy_flux = []
+full_number_flux = []
 
 #get date values that are constant over the full 24 hours
 date_obj = datetime.datetime.strptime(f'{fyear} {fday}', '%Y %j')
@@ -104,6 +106,7 @@ date_obj = datetime.datetime.strptime(f'{fyear} {fday}', '%Y %j')
 #set channel values and headers
 raw_channel_order = [4, 3, 2, 1, 8, 7, 6, 5, 12, 11, 10, 9, 16, 15, 14, 13, 20, 19, 18, 17] #order the energy channels appear in the .gz file
 channel_energies = np.array([30000, 24000, 13900, 9450, 6460, 4400, 3000, 2040, 1392, 949, 949, 646, 440, 300, 204, 139, 95, 65, 44, 30]) #channel energies in eV
+deltaE_i = np.array([9600, 8050, 5475, 3720, 2525, 1730, 1180, 804, 545.5, 373, 373, 254.5, 173, 118, 80.5, 54.5, 37, 25.5, 17.5, 14])
 energy_headers = ['seconds'] + [f'channel {i} ({channel_energies[i-1]} eV)' for i in raw_channel_order] #electron energy channel headers
 
 #%%make geometric factors dataframe
@@ -143,7 +146,6 @@ sat_factors = geometric_factors[f'{sat}']
 for i in range(len(records)):
     start_idx = i * 60
     end_idx = start_idx + 60
-    #print(i)
     single_minute = records[i, :] #data from a specified minute
     second_data = single_minute[17:]
     second_data = second_data.reshape(-1, 43) #electron and ion channel energies
@@ -201,8 +203,23 @@ for i in range(len(records)):
     diff_energy_flux.index.name = 'time' #rename the dataframe index to time
     
     full_energy_flux.append(diff_energy_flux)
+    full_number_flux.append(diff_number_flux)
     
 diff_energy_flux_df = pd.concat(full_energy_flux, axis = 0)
+diff_number_flux_df = pd.concat(full_number_flux, axis = 0)
+
+J_i = diff_number_flux_df #differential number flux
+JE_i = diff_energy_flux_df #differential energy flux
+    
+J = np.nansum(J_i * deltaE_i, axis = 1) #integrated number flux
+JE = np.nansum(JE_i * deltaE_i, axis = 1) #integrated energy flux
+E_avg = np.divide(
+    JE,
+    J,
+    out = np.full_like(J, np.nan),
+    where = J > 0)
+
+E_avg =  pd.DataFrame(E_avg, index = diff_energy_flux_df.index)
 
 #remove the 11th column of necessary arrays if SSJ5 data is being used
 if int(sat_num) > 15:
@@ -223,6 +240,8 @@ mask = df_interval.any(axis = 1)
 false_idx = np.where(~mask)[0]
 df_interval = df_interval[df_interval.any(axis = 1)] #remove any values that are all zeros; these indicate data gaps
 df_plot = df_interval.reindex(plot_index) #fill in the missing data timestamps with nans
+
+E_avg_interval = E_avg.loc[dt_start:dt_end]
 
 diff_energy_flux_array = df_plot.values.astype(float) #get the differential energy flux values from the interval dataframe
 
@@ -250,42 +269,58 @@ except:
     plot_altitude = full_altitude[idx]
     #print('no missing timestamps')
 
-#create the time energy sepectrogram
-fig, ax = plt.subplots(figsize = (20, 6))
+#%%create the time energy sepectrogram
+#fig, (ax_spec, ax_mean) = plt.subplots(2, 1,
+#                                       figsize=(20, 8),
+#                                       sharex=True) #specify axes for the spectrogram and the average electron energies
+
+fig = plt.figure(figsize=(20, 8))
+
+gs = gridspec.GridSpec(
+    2, 2,
+    width_ratios = [50, 0.5], #narrow column for colorbar, adjust to change thickness
+    wspace = 0.02, #adjust to change distance of colorbar from spectrogram
+    height_ratios = [1, 1],
+    hspace = 0.05
+)
+
+ax_spec = fig.add_subplot(gs[0, 0])
+ax_mean = fig.add_subplot(gs[1, 0], sharex = ax_spec)
+cax = fig.add_subplot(gs[0, 1])  #colorbar axis
 
 x = df_plot.index #number of points to plot on x-axis
 diff_energy_flux_log10 = np.log10(diff_energy_flux_array)
 
-#transpose_flux_gz = diff_energy_flux_log10.T
-
-im = ax.pcolormesh(
+im = ax_spec.pcolormesh(
     x, channel_energies, diff_energy_flux_log10.T, #x, y, and z-axes
     cmap = 'jet', shading = 'nearest',
-    vmax = np.max(10) #define color limit
-    )
+    vmax = np.max(10)) #define color limit
 
-label_x = -0.05
+label_x = -0.01
 labelsize = 10
 pad = -9.5
 
+ax_mean.plot(df_plot.index, E_avg_interval,
+             color = 'black', linewidth = 1.5)
+
 #add labels to UT axis
 #==============================================================================
-ax.tick_params(axis = 'x', direction = 'in', length = 6, labelsize = labelsize) #place tick marks on inside of spine and size accordingly
-ax.xaxis.set_major_formatter(mdates.DateFormatter('%H%M')) #format the tick marks
-ax.xaxis.set_major_locator(mdates.MinuteLocator(interval = 9)) #set the tick interval in minutes
+ax_mean.tick_params(axis = 'x', direction = 'in', length = 6, labelsize = labelsize) #place tick marks on inside of spine and size accordingly
+ax_mean.xaxis.set_major_formatter(mdates.DateFormatter('%H%M')) #format the tick marks
+ax_mean.xaxis.set_major_locator(mdates.MinuteLocator(interval = 9)) #set the tick interval in minutes
 #locator = mdates.AutoDateLocator(minticks = 5, maxticks = 22)
 #ax.xaxis.set_major_locator(locator)
 
-xlabel_object = ax.set_xlabel('UT', labelpad = pad)
+xlabel_object = ax_mean.set_xlabel('UT', labelpad = pad)
 xlabel_object.set_ha('right')
 xlabel_object.set_position((label_x, 0))
 
 #add satellite geomagnetic latitude to x-axis
 #==============================================================================
-ax2 = ax.secondary_xaxis('bottom')
-ax2.set_xticks(ax.get_xticks())
+ax2 = ax_mean.secondary_xaxis('bottom')
+ax2.set_xticks(ax_mean.get_xticks())
 #ax2.set_xticklabels([f'{m:.1f}' for m in plot_mlat[ax.get_xticks().astype(int)]])
-ax2.set_xticklabels(get_labels(ax.get_xticks(), plot_mlat, df_plot))
+ax2.set_xticklabels(get_labels(ax_mean.get_xticks(), plot_mlat, df_plot))
 
 ax2.spines['bottom'].set_position(('outward', 12)) #set the spine position
 ax2.spines['bottom'].set_visible(False) #hide the spine of the second axis
@@ -297,10 +332,10 @@ xlabel_object.set_position((label_x, 0))
 
 #add MLT to x-axis
 #==============================================================================
-ax3 = ax.secondary_xaxis('bottom')
-ax3.set_xticks(ax.get_xticks())
+ax3 = ax_mean.secondary_xaxis('bottom')
+ax3.set_xticks(ax_mean.get_xticks())
 #ax3.set_xticklabels([f'{m:.1f}' for m in plot_mlt[ax.get_xticks().astype(int)]])
-ax3.set_xticklabels(get_labels(ax.get_xticks(), plot_mlt, df_plot))
+ax3.set_xticklabels(get_labels(ax_mean.get_xticks(), plot_mlt, df_plot))
 
 ax3.spines['bottom'].set_position(('outward', 24)) #set the spine position
 ax3.spines['bottom'].set_visible(False) #hide the spine of the second axis
@@ -312,10 +347,10 @@ xlabel_object.set_position((label_x, 0))
 
 #add satellite altitude to x-axis
 #==============================================================================
-ax4 = ax.secondary_xaxis('bottom')
-ax4.set_xticks(ax.get_xticks())
+ax4 = ax_mean.secondary_xaxis('bottom')
+ax4.set_xticks(ax_mean.get_xticks())
 #ax4.set_xticklabels([f'{m:.1f}' for m in plot_altitude[ax.get_xticks().astype(int)]])
-ax4.set_xticklabels(get_labels(ax.get_xticks(), plot_altitude, df_plot))
+ax4.set_xticklabels(get_labels(ax_mean.get_xticks(), plot_altitude, df_plot))
 
 ax4.spines['bottom'].set_position(('outward', 36)) #set the spine position
 ax4.spines['bottom'].set_visible(False) #hide the spine of the second axis
@@ -325,20 +360,31 @@ xlabel_object = ax4.set_xlabel('Alt', labelpad = pad)
 xlabel_object.set_ha('right')
 xlabel_object.set_position((label_x, 0))
 
-plt.title(f'{sat} {fyear}{fmonth}{fday} {st_hhmm}-{nd_hhmm}')
+#set plot title
+ax_spec.set_title(f'{sat} {fyear}{fmonth}{fday} {st_hhmm}-{nd_hhmm}')
 
-ax.set_ylabel('Electron Energy\nlog (eV)')
-ax.set_yscale('log')
-ax.tick_params(axis = 'y', which = 'major', direction = 'in', left = True, right = True, length = 6)
-ax.tick_params(axis = 'y', which = 'minor', direction = 'in', left = True, right = True, length = 3)
+ax_spec.set_ylabel('Electron Energy\nlog (eV)')
+ax_spec.set_yscale('log')
+ax_spec.tick_params(axis = 'x', length = 0) #remove tick marks from the underside of the spectrogram x-axis
+ax_spec.tick_params(axis='x', labelbottom = False)
+ax_spec.tick_params(axis = 'y', which = 'major', direction = 'in', left = True, right = True, length = 6)
+ax_spec.tick_params(axis = 'y', which = 'minor', direction = 'in', left = True, right = True, length = 3)
 
-cbar = fig.colorbar(im, ax = ax, orientation = 'vertical')
+ax_mean.set_ylabel('Eavg (eV)')
+ax_mean.set_yscale('log')
+ax_mean.tick_params(axis = 'y', which = 'major', direction = 'in', left = True, right = True, length = 6)
+ax_mean.tick_params(axis = 'y', which = 'minor', direction = 'in', left = True, right = True, length = 3)
+
+#cbar = fig.colorbar(im, ax = ax_spec, orientation = 'vertical')
+cbar = fig.colorbar(im, cax = cax)
 cbar.set_label('Differential Energy Flux\nlog (eV/$cm^2$-s-sr-eV)')
 
-save_path = '/import/SUPERDARN/matthew/dmsp/plots'
-file_name = 'gz_' + str(sat) + '_' + str(date_str) + '_' + str(sttime[8:12]) + '-' + str(ndtime[8:12])
-plt.savefig(save_path + '/' + date_str + '/' + file_name + '.png')
+#save_path = '/import/SUPERDARN/matthew/dmsp/plots'
+#file_name = 'gz_' + str(sat) + '_' + str(date_str) + '_' + str(sttime[8:12]) + '-' + str(ndtime[8:12])
+#plt.savefig(save_path + '/' + date_str + '/' + file_name + '.png')
 
+#plt.plot(E_avg)
+#plt.yscale('log')
 
 
 
